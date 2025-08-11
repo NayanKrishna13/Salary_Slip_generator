@@ -13,10 +13,10 @@ pip install -r requirements.txt
 ### Usage
 Assuming your Excel file is at `/workspace/salary.xlsx` and contains a `Code` column:
 
+- Non-interactive (flags):
 ```bash
 python /workspace/generate_payslip.py \
   --excel-path /workspace/salary.xlsx \
-  # or set env var once: EXCEL_PATH=/workspace/salary.xlsx
   --sheet-name 0 \
   --employee-code 61 \
   --company-name "Your Org Name" \
@@ -24,6 +24,15 @@ python /workspace/generate_payslip.py \
   --output-dir /workspace/output
 ```
 
+- Interactive prompts (no flags needed except --interactive):
+```bash
+python /workspace/generate_payslip.py --interactive
+```
+
+- Optional: set env var once to avoid --excel-path each time:
+```bash
+export EXCEL_PATH=/workspace/salary.xlsx
+```
 The generated file will be saved as `/workspace/output/payslip_<code>.pdf`.
 
 ### Notes

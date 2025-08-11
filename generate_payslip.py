@@ -35,7 +35,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--employee-code",
-        required=True,
+        default=None,
         help="Employee code to lookup (as shown in the 'Code' column)",
     )
     parser.add_argument(
@@ -60,7 +60,18 @@ def parse_args() -> argparse.Namespace:
         default="₹",
         help="Currency symbol to prefix amounts (default: ₹).",
     )
+    parser.add_argument(
+        "--interactive",
+        action="store_true",
+        help="Prompt for inputs via standard input instead of requiring flags.",
+    )
     return parser.parse_args()
+
+
+def prompt_with_default(prompt_text: str, default_value: Optional[str]) -> str:
+    suffix = f" [{default_value}]" if default_value not in (None, "") else ""
+    value = input(f"{prompt_text}{suffix}: ").strip()
+    return value or (default_value or "")
 
 
 def normalize_column(name: str) -> str:
@@ -218,6 +229,21 @@ def build_pdf(
 
 def main() -> None:
     args = parse_args()
+
+    if args.interactive:
+        # Collect missing values interactively
+        args.excel_path = prompt_with_default("Excel path", str(args.excel_path))
+        args.sheet_name = prompt_with_default("Sheet name/index", str(args.sheet_name))
+        if isinstance(args.sheet_name, str) and args.sheet_name.isdigit():
+            args.sheet_name = int(args.sheet_name)
+        args.employee_code = prompt_with_default("Employee code", str(args.employee_code or "")).strip()
+        args.company_name = prompt_with_default("Company name", args.company_name)
+        args.month = prompt_with_default("Month label (e.g., Jul 2025)", args.month or "") or None
+        args.output_dir = prompt_with_default("Output directory", args.output_dir)
+        args.currency_symbol = prompt_with_default("Currency symbol", args.currency_symbol)
+
+    if not args.employee_code:
+        raise SystemExit("--employee-code is required (or run with --interactive).")
 
     month_str = args.month or datetime.now().strftime("%b %Y")
 
