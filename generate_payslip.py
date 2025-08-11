@@ -10,11 +10,12 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 
-# Default Excel path can be overridden via EXCEL_PATH environment variable
-DEFAULT_EXCEL_PATH = os.environ.get("EXCEL_PATH", "/workspace/salary.xlsx")
-DEFAULT_SHEET = 0
-DEFAULT_OUTPUT_DIR = "./output"
-DEFAULT_CURRENCY = "₹"
+EXCEL_FILE_PATH = "/workspace/salary.xlsx"
+SHEET_NAME_OR_INDEX = 0
+OUTPUT_DIR = "./output"
+CURRENCY_SYMBOL = "₹"
+COMPANY_NAME = ""
+MONTH_LABEL_DEFAULT = datetime.now().strftime("%b %Y")
 
 
 def prompt_with_default(prompt_text: str, default_value: Optional[str]) -> str:
@@ -175,16 +176,19 @@ def build_pdf(
 def main() -> None:
     print("Interactive Payslip PDF Generator")
 
-    excel_path = prompt_with_default("Excel path", DEFAULT_EXCEL_PATH)
-    sheet_input = prompt_with_default("Sheet name/index", str(DEFAULT_SHEET))
-    sheet_name: Any = int(sheet_input) if sheet_input.isdigit() else sheet_input
+    excel_path = EXCEL_FILE_PATH
+    sheet_input = SHEET_NAME_OR_INDEX
+    if isinstance(sheet_input, str) and sheet_input.isdigit():
+        sheet_name: Any = int(sheet_input)
+    else:
+        sheet_name = sheet_input
     employee_code = prompt_with_default("Employee code", "").strip()
     if not employee_code:
         raise SystemExit("Employee code is required.")
-    company_name = prompt_with_default("Company name", "")
-    month = prompt_with_default("Month label (e.g., Jul 2025)", datetime.now().strftime("%b %Y"))
-    output_dir = prompt_with_default("Output directory", DEFAULT_OUTPUT_DIR)
-    currency_symbol = prompt_with_default("Currency symbol", DEFAULT_CURRENCY)
+    company_name = prompt_with_default("Company name", COMPANY_NAME)
+    month = prompt_with_default("Month label (e.g., Jul 2025)", MONTH_LABEL_DEFAULT)
+    output_dir = prompt_with_default("Output directory", OUTPUT_DIR)
+    currency_symbol = CURRENCY_SYMBOL
 
     headers, rows = read_sheet_headers_and_rows(excel_path, sheet_name)
     if not headers or not rows:
@@ -236,7 +240,8 @@ def main() -> None:
         + f" (Code: {emp_identifier})"
     )
 
-    output_filename = f"payslip_{emp_identifier}.pdf"
+    safe_name = (emp_name or "").strip().replace(" ", "_") if emp_name else "unknown"
+    output_filename = f"payslip_{safe_name}_{emp_identifier}.pdf"
     output_path = os.path.join(output_dir, output_filename)
 
     build_pdf(
