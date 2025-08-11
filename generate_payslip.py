@@ -12,6 +12,7 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 
 EXCEL_FILE_PATH = "/workspace/salary.xlsx"
 SHEET_NAME_OR_INDEX = 0
+HEADER_ROW_INDEX_ONE_BASED = 2
 OUTPUT_DIR = "./output"
 CURRENCY_SYMBOL = "₹"
 COMPANY_NAME = ""
@@ -59,7 +60,11 @@ def format_amount(value: Any, currency_symbol: str) -> str:
     return f"{currency_symbol} {number:,.2f}"
 
 
-def read_sheet_headers_and_rows(excel_path: str, sheet_name_or_index: Any) -> Tuple[List[str], List[List[Any]]]:
+def read_sheet_headers_and_rows(
+    excel_path: str,
+    sheet_name_or_index: Any,
+    header_row_one_based: Optional[int] = None,
+) -> Tuple[List[str], List[List[Any]]]:
     wb = load_workbook(excel_path, data_only=True)
     if isinstance(sheet_name_or_index, int) or (isinstance(sheet_name_or_index, str) and sheet_name_or_index.isdigit()):
         idx = int(sheet_name_or_index)
@@ -72,13 +77,36 @@ def read_sheet_headers_and_rows(excel_path: str, sheet_name_or_index: Any) -> Tu
         return [], []
 
     header_row: Optional[List[Any]] = None
-    header_index: int = 0
-    for i, r in enumerate(rows):
-        if any(cell is not None and str(cell).strip() != "" for cell in r):
-            header_row = [str(c) if c is not None else "" for c in r]
-            header_index = i
-            break
+    header_index: Optional[int] = None
+
+    # Strategy 1: Use the provided 1-based header row index if given
+    if header_row_one_based is not None and 1 <= header_row_one_based <= len(rows):
+        header_index = header_row_one_based - 1
+        header_row = [str(c) if c is not None else "" for c in rows[header_index]]
+
+    def row_has_code(cells: List[Any]) -> bool:
+        return any(str(v).strip().lower() == "code" for v in cells if v is not None)
+
+    # Strategy 2: If selected header row doesn't contain 'Code', try to find a nearby row that does
+    if header_row is None or not row_has_code(header_row):
+        search_limit = min(10, len(rows))
+        for i in range(search_limit):
+            candidate = rows[i]
+            if any(cell is not None and str(cell).strip() != "" for cell in candidate):
+                if row_has_code(candidate):
+                    header_row = [str(c) if c is not None else "" for c in candidate]
+                    header_index = i
+                    break
+
+    # Strategy 3: Fallback to first non-empty row
     if header_row is None:
+        for i, r in enumerate(rows):
+            if any(cell is not None and str(cell).strip() != "" for cell in r):
+                header_row = [str(c) if c is not None else "" for c in r]
+                header_index = i
+                break
+
+    if header_row is None or header_index is None:
         return [], []
 
     data_rows = rows[header_index + 1 :]
@@ -190,7 +218,9 @@ def main() -> None:
     output_dir = prompt_with_default("Output directory", OUTPUT_DIR)
     currency_symbol = CURRENCY_SYMBOL
 
-    headers, rows = read_sheet_headers_and_rows(excel_path, sheet_name)
+    headers, rows = read_sheet_headers_and_rows(
+        excel_path, sheet_name, header_row_one_based=HEADER_ROW_INDEX_ONE_BASED
+    )
     if not headers or not rows:
         raise SystemExit("The selected sheet appears to be empty or has no headers.")
 
