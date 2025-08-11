@@ -183,7 +183,7 @@ def build_pdf(
     output_pdf_path: str,
     header_title: str,
     company_name: Optional[str],
-    table_data: List[List[str]],
+    body_flowables: List[Any],
 ) -> None:
     os.makedirs(os.path.dirname(output_pdf_path), exist_ok=True)
 
@@ -214,25 +214,7 @@ def build_pdf(
     story.append(Paragraph(header_title, styles["Heading2"]))
     story.append(Spacer(1, 4 * mm))
 
-    table = Table(table_data, colWidths=[70 * mm, None])
-
-    style = TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
-        ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
-        ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-        ("FONTNAME", (0, 0), (-1, -1), font_name),
-        ("FONTNAME", (0, 0), (-1, 0), bold_font_name or font_name),
-        ("FONTSIZE", (0, 0), (-1, -1), 10),
-        ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
-        ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
-    ])
-
-    for row_idx in range(1, len(table_data)):
-        if row_idx % 2 == 0:
-            style.add("BACKGROUND", (0, row_idx), (-1, row_idx), colors.whitesmoke)
-
-    table.setStyle(style)
-    story.append(table)
+    story.extend(body_flowables)
 
     doc.build(story)
 
@@ -274,24 +256,104 @@ def main() -> None:
 
     row = rows[match_idx]
 
-    ordered_headers = list(headers)
+    # Classify columns into income and deduction sections
+    norm_to_col = {normalize_column(h): h for h in headers}
+    deduction_keys = {
+        "pf",
+        "incometax",
+        "glis",
+        "refundspf",
+        "refundswf",
+        "tds",
+        "esi",
+        "professionaltax",
+        "loan",
+        "advance",
+        "totaldeductions",
+    }
+    summary_gross_keys = {"gross"}
+    summary_total_ded_keys = {"totaldeductions"}
+    summary_net_keys = {"netpay"}
+    info_keys = {"slno", "sl", "code", "name", "employee", "employeename", "empname"}
 
-    def move_front(col_name: str) -> None:
-        if col_name in ordered_headers:
-            ordered_headers.insert(0, ordered_headers.pop(ordered_headers.index(col_name)))
+    incomes: List[Tuple[str, Any]] = []
+    deductions: List[Tuple[str, Any]] = []
+    gross_value = None
+    total_deductions_value = None
+    net_pay_value = None
 
-    for possible_name_col in ["Name", "Employee Name", "Employee", "Emp Name"]:
-        if possible_name_col in ordered_headers:
-            move_front(possible_name_col)
-            break
+    for h in headers:
+        n = normalize_column(h)
+        value = row[headers.index(h)]
+        if n in info_keys:
+            continue
+        if n in summary_net_keys:
+            net_pay_value = value
+            continue
+        if n in summary_gross_keys:
+            gross_value = value
+            continue
+        if n in summary_total_ded_keys:
+            total_deductions_value = value
+            continue
+        # Classify unknown numeric columns: assume known deductions list, else income
+        if n in deduction_keys:
+            deductions.append((h, value))
+        else:
+            incomes.append((h, value))
 
-    move_front(code_col)
+    # Compute totals if not provided
+    if gross_value is None:
+        gross_value = sum((v or 0) for _, v in incomes if isinstance(v, (int, float)))
+    if total_deductions_value is None:
+        total_deductions_value = sum((v or 0) for _, v in deductions if isinstance(v, (int, float)))
+    if net_pay_value is None:
+        try:
+            net_pay_value = float(gross_value or 0) - float(total_deductions_value or 0)
+        except Exception:
+            net_pay_value = None
 
-    ordered_row = [row[headers.index(c)] for c in ordered_headers]
+    # Build income and deduction tables
+    def build_section(title: str, items: List[Tuple[str, Any]], total_label: str, total_value: Any) -> Table:
+        rows_data: List[List[str]] = [[f"{title}", "Amount"]]
+        for label, val in items:
+            rows_data.append([str(label), format_amount(val, currency_symbol)])
+        rows_data.append([total_label, format_amount(total_value, currency_symbol)])
 
-    kv_pairs = row_to_key_values(ordered_headers, ordered_row, currency_symbol=currency_symbol)
+        table = Table(rows_data, colWidths=[80 * mm, None])
+        font_name, bold_font_name = register_unicode_font()
+        style = TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
+            ("FONTNAME", (0, 0), (-1, -1), font_name),
+            ("FONTNAME", (0, 0), (-1, 0), bold_font_name or font_name),
+            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+            ("FONTSIZE", (0, 0), (-1, -1), 10),
+            ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+            ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
+        ])
+        # Stripe body rows
+        for idx in range(1, len(rows_data)):
+            if idx % 2 == 0:
+                style.add("BACKGROUND", (0, idx), (-1, idx), colors.whitesmoke)
+        # Bold total row
+        style.add("FONTNAME", (0, len(rows_data) - 1), (-1, len(rows_data) - 1), bold_font_name or font_name)
+        table.setStyle(style)
+        return table
 
-    table_data = make_table_data(kv_pairs)
+    income_table = build_section("Income", incomes, "Gross", gross_value)
+    deduction_table = build_section("Deductions", deductions, "Total Deductions", total_deductions_value)
+
+    # Place the two sections horizontally
+    sections = Table([[income_table, deduction_table]], colWidths=[100 * mm, None])
+    sections.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
+
+    # Net Pay paragraph outside tables
+    font_name, bold_font_name = register_unicode_font()
+    styles = getSampleStyleSheet()
+    styles["Heading3"].fontName = bold_font_name or font_name
+    net_pay_para = Paragraph(f"<b>Net Pay:</b> {format_amount(net_pay_value, currency_symbol)}", styles["Heading3"])
+
+    body_flowables = [sections, Spacer(1, 6 * mm), net_pay_para]
 
     emp_identifier = str(row[headers.index(code_col)])
     emp_name = None
@@ -314,7 +376,7 @@ def main() -> None:
         output_pdf_path=output_path,
         header_title=header_title,
         company_name=company_name,
-        table_data=table_data,
+        body_flowables=body_flowables,
     )
 
     print(f"Generated: {os.path.abspath(output_path)}")
