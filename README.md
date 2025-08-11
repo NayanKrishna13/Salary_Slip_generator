@@ -13,23 +13,20 @@ pip install -r requirements.txt
 ### Usage
 Assuming your Excel file is at `/workspace/salary.xlsx` and contains a `Code` column:
 
-- Non-interactive (flags):
+### Usage (interactive only)
 ```bash
-python /workspace/generate_payslip.py \
-  --excel-path /workspace/salary.xlsx \
-  --sheet-name 0 \
-  --employee-code 61 \
-  --company-name "Your Org Name" \
-  --month "Jul 2025" \
-  --output-dir /workspace/output
+python /workspace/generate_payslip.py
 ```
+The program will prompt for:
+- Excel path (defaults to `/workspace/salary.xlsx` or env `EXCEL_PATH`)
+- Sheet name/index (default: 0)
+- Employee code (required)
+- Company name (optional)
+- Month label (defaults to current month)
+- Output directory (default: `./output`)
+- Currency symbol (default: `₹`)
 
-- Interactive prompts (no flags needed except --interactive):
-```bash
-python /workspace/generate_payslip.py --interactive
-```
-
-- Optional: set env var once to avoid --excel-path each time:
+Optional: you can set a default Excel path via env var:
 ```bash
 export EXCEL_PATH=/workspace/salary.xlsx
 ```

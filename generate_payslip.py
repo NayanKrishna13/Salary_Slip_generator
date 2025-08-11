@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-import argparse
 import os
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple, Any
@@ -13,59 +12,9 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, Tabl
 
 # Default Excel path can be overridden via EXCEL_PATH environment variable
 DEFAULT_EXCEL_PATH = os.environ.get("EXCEL_PATH", "/workspace/salary.xlsx")
-
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description=(
-            "Generate a PDF payslip from an Excel salary sheet by employee code."
-        )
-    )
-    parser.add_argument(
-        "--excel-path",
-        default=DEFAULT_EXCEL_PATH,
-        help="Path to the Excel file (default from EXCEL_PATH or /workspace/salary.xlsx)",
-    )
-    parser.add_argument(
-        "--sheet-name",
-        default=0,
-        help=(
-            "Excel sheet name or index (default 0). Use the sheet that contains the salary table."
-        ),
-    )
-    parser.add_argument(
-        "--employee-code",
-        default=None,
-        help="Employee code to lookup (as shown in the 'Code' column)",
-    )
-    parser.add_argument(
-        "--output-dir",
-        default="./output",
-        help="Directory where the generated PDF will be saved (default: ./output)",
-    )
-    parser.add_argument(
-        "--month",
-        default=None,
-        help=(
-            "Optional month string to show on the payslip header (e.g., 'Jul 2025')."
-        ),
-    )
-    parser.add_argument(
-        "--company-name",
-        default="",
-        help="Optional company/department name to show on the payslip header.",
-    )
-    parser.add_argument(
-        "--currency-symbol",
-        default="₹",
-        help="Currency symbol to prefix amounts (default: ₹).",
-    )
-    parser.add_argument(
-        "--interactive",
-        action="store_true",
-        help="Prompt for inputs via standard input instead of requiring flags.",
-    )
-    return parser.parse_args()
+DEFAULT_SHEET = 0
+DEFAULT_OUTPUT_DIR = "./output"
+DEFAULT_CURRENCY = "₹"
 
 
 def prompt_with_default(prompt_text: str, default_value: Optional[str]) -> str:
@@ -91,7 +40,6 @@ def find_code_column(columns: List[str]) -> Optional[str]:
     for cand in candidates:
         if cand in normalized_to_original:
             return normalized_to_original[cand]
-    # Fallback: pick any column that contains 'code'
     for n, original in normalized_to_original.items():
         if "code" in n:
             return original
@@ -122,7 +70,6 @@ def read_sheet_headers_and_rows(excel_path: str, sheet_name_or_index: Any) -> Tu
     if not rows:
         return [], []
 
-    # Find first non-empty row to serve as header
     header_row: Optional[List[Any]] = None
     header_index: int = 0
     for i, r in enumerate(rows):
@@ -133,9 +80,7 @@ def read_sheet_headers_and_rows(excel_path: str, sheet_name_or_index: Any) -> Tu
     if header_row is None:
         return [], []
 
-    # Remaining rows are data
     data_rows = rows[header_index + 1 :]
-    # Trim trailing None values for each row to align with header length
     header_len = len(header_row)
     normalized_rows: List[List[Any]] = []
     for r in data_rows:
@@ -228,26 +173,20 @@ def build_pdf(
 
 
 def main() -> None:
-    args = parse_args()
+    print("Interactive Payslip PDF Generator")
 
-    if args.interactive:
-        # Collect missing values interactively
-        args.excel_path = prompt_with_default("Excel path", str(args.excel_path))
-        args.sheet_name = prompt_with_default("Sheet name/index", str(args.sheet_name))
-        if isinstance(args.sheet_name, str) and args.sheet_name.isdigit():
-            args.sheet_name = int(args.sheet_name)
-        args.employee_code = prompt_with_default("Employee code", str(args.employee_code or "")).strip()
-        args.company_name = prompt_with_default("Company name", args.company_name)
-        args.month = prompt_with_default("Month label (e.g., Jul 2025)", args.month or "") or None
-        args.output_dir = prompt_with_default("Output directory", args.output_dir)
-        args.currency_symbol = prompt_with_default("Currency symbol", args.currency_symbol)
+    excel_path = prompt_with_default("Excel path", DEFAULT_EXCEL_PATH)
+    sheet_input = prompt_with_default("Sheet name/index", str(DEFAULT_SHEET))
+    sheet_name: Any = int(sheet_input) if sheet_input.isdigit() else sheet_input
+    employee_code = prompt_with_default("Employee code", "").strip()
+    if not employee_code:
+        raise SystemExit("Employee code is required.")
+    company_name = prompt_with_default("Company name", "")
+    month = prompt_with_default("Month label (e.g., Jul 2025)", datetime.now().strftime("%b %Y"))
+    output_dir = prompt_with_default("Output directory", DEFAULT_OUTPUT_DIR)
+    currency_symbol = prompt_with_default("Currency symbol", DEFAULT_CURRENCY)
 
-    if not args.employee_code:
-        raise SystemExit("--employee-code is required (or run with --interactive).")
-
-    month_str = args.month or datetime.now().strftime("%b %Y")
-
-    headers, rows = read_sheet_headers_and_rows(args.excel_path, args.sheet_name)
+    headers, rows = read_sheet_headers_and_rows(excel_path, sheet_name)
     if not headers or not rows:
         raise SystemExit("The selected sheet appears to be empty or has no headers.")
 
@@ -255,17 +194,16 @@ def main() -> None:
     if code_col not in headers:
         raise SystemExit("The sheet must contain a 'Code' column.")
 
-    target_code = str(args.employee_code).strip().lower()
+    target_code = employee_code.strip().lower()
     match_idx = find_matching_row(headers, rows, code_col, target_code)
     if match_idx is None:
         sample_values = ", ".join(sorted({str(r[headers.index(code_col)]) for r in rows if r[headers.index(code_col)] is not None})[:20])
         raise SystemExit(
-            f"No employee found with code '{args.employee_code}'. Available samples: {sample_values} ..."
+            f"No employee found with code '{employee_code}'. Available samples: {sample_values} ..."
         )
 
     row = rows[match_idx]
 
-    # Reorder to show Name and Code first if present
     ordered_headers = list(headers)
 
     def move_front(col_name: str) -> None:
@@ -279,10 +217,9 @@ def main() -> None:
 
     move_front(code_col)
 
-    # Rebuild row according to new order
     ordered_row = [row[headers.index(c)] for c in ordered_headers]
 
-    kv_pairs = row_to_key_values(ordered_headers, ordered_row, currency_symbol=args.currency_symbol)
+    kv_pairs = row_to_key_values(ordered_headers, ordered_row, currency_symbol=currency_symbol)
 
     table_data = make_table_data(kv_pairs)
 
@@ -294,18 +231,18 @@ def main() -> None:
             break
 
     header_title = (
-        f"Salary Statement for {month_str}"
+        f"Salary Statement for {month}"
         + (f" — {emp_name}" if emp_name else "")
         + f" (Code: {emp_identifier})"
     )
 
     output_filename = f"payslip_{emp_identifier}.pdf"
-    output_path = os.path.join(args.output_dir, output_filename)
+    output_path = os.path.join(output_dir, output_filename)
 
     build_pdf(
         output_pdf_path=output_path,
         header_title=header_title,
-        company_name=args.company_name,
+        company_name=company_name,
         table_data=table_data,
     )
 
