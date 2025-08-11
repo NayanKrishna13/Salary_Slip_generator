@@ -185,7 +185,7 @@ def main() -> None:
     employee_code = prompt_with_default("Employee code", "").strip()
     if not employee_code:
         raise SystemExit("Employee code is required.")
-    company_name = prompt_with_default("Company name", COMPANY_NAME)
+    company_name = COMPANY_NAME
     month = prompt_with_default("Month label (e.g., Jul 2025)", MONTH_LABEL_DEFAULT)
     output_dir = prompt_with_default("Output directory", OUTPUT_DIR)
     currency_symbol = CURRENCY_SYMBOL
