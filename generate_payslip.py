@@ -11,6 +11,9 @@ from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 
+# Default Excel path can be overridden via EXCEL_PATH environment variable
+DEFAULT_EXCEL_PATH = os.environ.get("EXCEL_PATH", "/workspace/salary.xlsx")
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -20,8 +23,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--excel-path",
-        required=True,
-        help="Absolute or relative path to the Excel file (e.g., /path/to/salary.xlsx)",
+        default=DEFAULT_EXCEL_PATH,
+        help="Path to the Excel file (default from EXCEL_PATH or /workspace/salary.xlsx)",
     )
     parser.add_argument(
         "--sheet-name",

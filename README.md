@@ -16,6 +16,7 @@ Assuming your Excel file is at `/workspace/salary.xlsx` and contains a `Code` co
 ```bash
 python /workspace/generate_payslip.py \
   --excel-path /workspace/salary.xlsx \
+  # or set env var once: EXCEL_PATH=/workspace/salary.xlsx
   --sheet-name 0 \
   --employee-code 61 \
   --company-name "Your Org Name" \
