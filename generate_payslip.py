@@ -214,8 +214,8 @@ def main() -> None:
     if not employee_code:
         raise SystemExit("Employee code is required.")
     company_name = COMPANY_NAME
-    month = prompt_with_default("Month label (e.g., Jul 2025)", MONTH_LABEL_DEFAULT)
-    output_dir = prompt_with_default("Output directory", OUTPUT_DIR)
+    month = MONTH_LABEL_DEFAULT
+    output_dir = OUTPUT_DIR
     currency_symbol = CURRENCY_SYMBOL
 
     headers, rows = read_sheet_headers_and_rows(
