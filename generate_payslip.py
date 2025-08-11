@@ -314,19 +314,20 @@ def main() -> None:
             net_pay_value = None
 
     # Build income and deduction tables
-    def build_section(title: str, items: List[Tuple[str, Any]], total_label: str, total_value: Any) -> Table:
+    def build_section(title: str, items: List[Tuple[str, Any]], total_label: str, total_value: Any, section_width: float) -> Table:
         rows_data: List[List[str]] = [[f"{title}", "Amount"]]
         for label, val in items:
             rows_data.append([str(label), format_amount(val, currency_symbol)])
         rows_data.append([total_label, format_amount(total_value, currency_symbol)])
 
-        table = Table(rows_data, colWidths=[80 * mm, None])
+        table = Table(rows_data, colWidths=[section_width * 0.6, section_width * 0.4])
         font_name, bold_font_name = register_unicode_font()
         style = TableStyle([
             ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
             ("FONTNAME", (0, 0), (-1, -1), font_name),
             ("FONTNAME", (0, 0), (-1, 0), bold_font_name or font_name),
-            ("ALIGN", (0, 0), (-1, -1), "LEFT"),
+            ("ALIGN", (0, 0), (0, -1), "LEFT"),
+            ("ALIGN", (1, 0), (1, -1), "RIGHT"),
             ("FONTSIZE", (0, 0), (-1, -1), 10),
             ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
             ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
@@ -340,11 +341,16 @@ def main() -> None:
         table.setStyle(style)
         return table
 
-    income_table = build_section("Income", incomes, "Gross", gross_value)
-    deduction_table = build_section("Deductions", deductions, "Total Deductions", total_deductions_value)
+    # Width allocation for sections to avoid crowding
+    total_width_mm = 170 * mm
+    income_width = total_width_mm * 0.5
+    deduction_width = total_width_mm * 0.5
 
-    # Place the two sections horizontally
-    sections = Table([[income_table, deduction_table]], colWidths=[100 * mm, None])
+    income_table = build_section("Income", incomes, "Gross", gross_value, income_width)
+    deduction_table = build_section("Deductions", deductions, "Total Deductions", total_deductions_value, deduction_width)
+
+    # Place the two sections horizontally with explicit widths
+    sections = Table([[income_table, deduction_table]], colWidths=[income_width, deduction_width])
     sections.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
 
     # Net Pay paragraph outside tables
