@@ -26,6 +26,6 @@ python /workspace/generate_payslip.py \
 The generated file will be saved as `/workspace/output/payslip_<code>.pdf`.
 
 ### Notes
-- The script tries to auto-detect the employee code column (e.g., `Code`, `Employee Code`, `Emp Code`).
+- The sheet must contain a `Code` column; the script matches employees using that column.
 - Most numeric fields are formatted as currency with the `₹` symbol by default. Change with `--currency-symbol`.
 - If your sheet uses a different layout, pass `--sheet-name` as the sheet title or index.

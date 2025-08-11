@@ -222,9 +222,9 @@ def main() -> None:
     if not headers or not rows:
         raise SystemExit("The selected sheet appears to be empty or has no headers.")
 
-    code_col = find_code_column(headers)
-    if not code_col:
-        raise SystemExit("Could not locate the employee code column. Ensure your sheet has a 'Code' column.")
+    code_col = "Code"
+    if code_col not in headers:
+        raise SystemExit("The sheet must contain a 'Code' column.")
 
     target_code = str(args.employee_code).strip().lower()
     match_idx = find_matching_row(headers, rows, code_col, target_code)
