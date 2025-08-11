@@ -11,6 +11,7 @@ from reportlab.lib.units import mm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.utils import ImageReader
 
 EXCEL_FILE_PATH = "/workspace/salary.xlsx"
 SHEET_NAME_OR_INDEX = 0
@@ -19,6 +20,10 @@ OUTPUT_DIR = "./output"
 CURRENCY_SYMBOL = ""
 COMPANY_NAME = ""
 MONTH_LABEL_DEFAULT = datetime.now().strftime("%b %Y")
+
+# Optional logo rendered at the bottom-left of each page
+LOGO_PATH = ""  # e.g., "/workspace/logo.png"; leave empty to disable
+LOGO_WIDTH_MM = 28  # visual width; height keeps image aspect ratio
 
 
 def prompt_with_default(prompt_text: str, default_value: Optional[str]) -> str:
@@ -200,6 +205,30 @@ def build_pdf(
         author=company_name or "",
     )
 
+    def draw_logo(canvas, doc):
+        if LOGO_PATH and os.path.exists(LOGO_PATH):
+            try:
+                img = ImageReader(LOGO_PATH)
+                iw, ih = img.getSize()
+                target_w = LOGO_WIDTH_MM * mm
+                # keep aspect ratio
+                scale = target_w / float(iw)
+                target_h = ih * scale
+                x = doc.leftMargin
+                y = 8 * mm
+                canvas.drawImage(
+                    LOGO_PATH,
+                    x,
+                    y,
+                    width=target_w,
+                    height=target_h,
+                    preserveAspectRatio=True,
+                    mask='auto',
+                )
+            except Exception:
+                # fail-safe: ignore logo if unreadable
+                pass
+
     styles = getSampleStyleSheet()
     # Apply font to common styles
     for style_key in ["Normal", "BodyText", "Title", "Heading1", "Heading2", "Heading3"]:
@@ -216,7 +245,7 @@ def build_pdf(
 
     story.extend(body_flowables)
 
-    doc.build(story)
+    doc.build(story, onFirstPage=draw_logo, onLaterPages=draw_logo)
 
 
 def main() -> None:
