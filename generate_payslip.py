@@ -9,6 +9,8 @@ from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import getSampleStyleSheet
 from reportlab.lib.units import mm
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 
 EXCEL_FILE_PATH = "/workspace/salary.xlsx"
 SHEET_NAME_OR_INDEX = 0
@@ -150,6 +152,33 @@ def make_table_data(kv_pairs: List[Tuple[str, str]]) -> List[List[str]]:
     return rows
 
 
+def register_unicode_font() -> tuple[str, Optional[str]]:
+    """Register a Unicode-capable font and return (regular_name, bold_name).
+
+    Tries common system fonts. Falls back to built-in if none found.
+    """
+    candidates = [
+        ("DejaVuSans", "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", "DejaVuSans-Bold", "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+        ("NotoSans", "/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf", "NotoSans-Bold", "/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf"),
+        ("FreeSans", "/usr/share/fonts/truetype/freefont/FreeSans.ttf", "FreeSansBold", "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf"),
+    ]
+
+    for reg_name, reg_path, bold_name, bold_path in candidates:
+        if os.path.exists(reg_path):
+            try:
+                pdfmetrics.registerFont(TTFont(reg_name, reg_path))
+                if os.path.exists(bold_path):
+                    pdfmetrics.registerFont(TTFont(bold_name, bold_path))
+                else:
+                    bold_name = None
+                return reg_name, bold_name
+            except Exception:
+                continue
+
+    # Fallback: built-in Helvetica (may not support ₹)
+    return "Helvetica", "Helvetica-Bold"
+
+
 def build_pdf(
     output_pdf_path: str,
     header_title: str,
@@ -157,6 +186,8 @@ def build_pdf(
     table_data: List[List[str]],
 ) -> None:
     os.makedirs(os.path.dirname(output_pdf_path), exist_ok=True)
+
+    font_name, bold_font_name = register_unicode_font()
 
     doc = SimpleDocTemplate(
         output_pdf_path,
@@ -170,6 +201,10 @@ def build_pdf(
     )
 
     styles = getSampleStyleSheet()
+    # Apply font to common styles
+    for style_key in ["Normal", "BodyText", "Title", "Heading1", "Heading2", "Heading3"]:
+        if style_key in styles:
+            styles[style_key].fontName = bold_font_name if (style_key.startswith("Heading") or style_key == "Title") and bold_font_name else font_name
     story: List[Any] = []
 
     if company_name:
@@ -185,7 +220,8 @@ def build_pdf(
         ("BACKGROUND", (0, 0), (-1, 0), colors.lightgrey),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.black),
         ("ALIGN", (0, 0), (-1, -1), "LEFT"),
-        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTNAME", (0, 0), (-1, -1), font_name),
+        ("FONTNAME", (0, 0), (-1, 0), bold_font_name or font_name),
         ("FONTSIZE", (0, 0), (-1, -1), 10),
         ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
         ("GRID", (0, 0), (-1, -1), 0.25, colors.grey),
