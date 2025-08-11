@@ -16,7 +16,7 @@ EXCEL_FILE_PATH = "/workspace/salary.xlsx"
 SHEET_NAME_OR_INDEX = 0
 HEADER_ROW_INDEX_ONE_BASED = 2
 OUTPUT_DIR = "./output"
-CURRENCY_SYMBOL = "₹"
+CURRENCY_SYMBOL = ""
 COMPANY_NAME = ""
 MONTH_LABEL_DEFAULT = datetime.now().strftime("%b %Y")
 
@@ -58,8 +58,8 @@ def format_amount(value: Any, currency_symbol: str) -> str:
     except Exception:
         return str(value)
     if number.is_integer():
-        return f"{currency_symbol} {int(number):,}"
-    return f"{currency_symbol} {number:,.2f}"
+        return f"{int(number):,}"
+    return f"{number:,.2f}"
 
 
 def read_sheet_headers_and_rows(
