@@ -107,6 +107,8 @@ def render_payslip(
     image_width: int = 1600,
     image_height: int = 1120,
     background_color: Tuple[int, int, int] = (255, 255, 255),
+    output_format: str = "png",
+    output_filename: Optional[str] = None,
 ) -> None:
     image = Image.new("RGB", (image_width, image_height), color=background_color)
     draw = ImageDraw.Draw(image)
@@ -313,8 +315,19 @@ def render_payslip(
     safe_name = "".join(c for c in f"{employee_no}_{name}" if c.isalnum() or c in ("-", "_"))
     if not safe_name:
         safe_name = "payslip"
-    filename = f"{safe_name}_{month_text.replace(' ', '_')}.png"
-    image.save(os.path.join(output_path, filename))
+    auto_filename = f"{safe_name}_{month_text.replace(' ', '_')}"
+
+    # Decide final path and save
+    if output_filename:
+        final_path = output_filename
+    else:
+        ext = ".pdf" if output_format.lower() == "pdf" else ".png"
+        final_path = os.path.join(output_path, f"{auto_filename}{ext}")
+
+    if output_format.lower() == "pdf":
+        image.convert("RGB").save(final_path, "PDF", resolution=300.0)
+    else:
+        image.save(final_path)
 
 
 def main():
@@ -327,6 +340,8 @@ def main():
     parser.add_argument("--month", required=False, default=None, help="Month label, e.g. 'July 2025'. Overrides data column if provided")
     parser.add_argument("--width", type=int, default=1600, help="Image width in pixels")
     parser.add_argument("--height", type=int, default=1120, help="Image height in pixels")
+    parser.add_argument("--output-format", choices=["png", "pdf"], default="png", help="Output format for the generated image (png or pdf)")
+    parser.add_argument("--output-filename", help="Optional: Specify a custom output filename (e.g., 'payslip_2023_07.pdf')")
 
     args = parser.parse_args()
 
@@ -381,6 +396,8 @@ def main():
             month_text=args.month,
             image_width=args.width,
             image_height=args.height,
+            output_format=args.output_format,
+            output_filename=args.output_filename,
         )
         print(f"Rendered payslip for row {idx}")
 

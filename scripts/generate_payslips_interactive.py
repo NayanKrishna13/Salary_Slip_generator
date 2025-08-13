@@ -6,6 +6,7 @@ from scripts.generate_payslips import read_dataframe, ensure_output_dir, render_
 # You can change these defaults directly in code if you prefer not to type them
 DEFAULT_EXCEL_ABS_PATH = "/workspace/examples/sample_input.csv"
 DEFAULT_OUTPUT_DIR_ABS_PATH = "/workspace/output"
+DEFAULT_OUTPUT_FILENAME = ""  # If set to an absolute path ending with .pdf, it will be used directly
 DEFAULT_LOGO_ABS_PATH = ""  # e.g. "/workspace/assets/csds_logo.png"
 DEFAULT_MONTH_TEXT: Optional[str] = None  # e.g. "July 2025" to override
 DEFAULT_IMAGE_WIDTH = 1600
@@ -38,12 +39,23 @@ def prompt_int(prompt_text: str, default_value: int) -> int:
 
 
 def main():
-    print("Payslip Image Generator (Interactive Mode)")
+    print("Payslip PDF Generator (Interactive, by Employee Code)")
     print("Provide absolute paths. Press Enter to accept defaults shown in brackets.")
 
     excel_path = prompt_abs_path("Absolute path to Excel/CSV data file", DEFAULT_EXCEL_ABS_PATH)
     output_dir = prompt_abs_path("Absolute path to output directory", DEFAULT_OUTPUT_DIR_ABS_PATH)
+    # Optional: exact PDF filename
+    output_filename = input(f"Absolute output PDF filename (leave blank to auto-name) [{DEFAULT_OUTPUT_FILENAME or 'auto'}]: ").strip() or DEFAULT_OUTPUT_FILENAME
+    if output_filename and (not os.path.isabs(output_filename) or not output_filename.lower().endswith(".pdf")):
+        print("If provided, output filename must be an absolute path ending with .pdf. Ignoring.")
+        output_filename = ""
+
     logo_path = prompt_abs_path("Absolute path to logo image (or leave blank)", DEFAULT_LOGO_ABS_PATH, allow_blank=True)
+
+    employee_code = input("Enter Employee Code (as in 'Employee No' column): ").strip()
+    if not employee_code:
+        print("Employee Code is required.")
+        return
 
     month_text = input(f"Month label to display (e.g. 'July 2025') [auto or data]: ").strip() or DEFAULT_MONTH_TEXT or None
 
@@ -74,25 +86,39 @@ def main():
         print(f"Failed to read data: {exc}")
         return
 
-    # Render each row
-    print(f"Generating payslips to {output_dir} ...")
-    for idx, row in df.iterrows():
-        try:
-            render_payslip(
-                row=row,
-                output_path=output_dir,
-                logo_path=(logo_path or None),
-                regular_font_path=font_regular,
-                bold_font_path=font_bold,
-                month_text=month_text,
-                image_width=width,
-                image_height=height,
-            )
-            print(f" - Rendered payslip for row {idx}")
-        except Exception as exc:
-            print(f" ! Failed to render row {idx}: {exc}")
+    # Find employee by code (string compare on 'Employee No')
+    if 'Employee No' not in df.columns:
+        print("Column 'Employee No' not found in data.")
+        return
 
-    print("Done.")
+    # Normalize to string for matching
+    df['__emp_no_str__'] = df['Employee No'].astype(str).str.strip()
+    match_rows = df[df['__emp_no_str__'] == str(employee_code).strip()]
+    if match_rows.empty:
+        print(f"No record found for Employee Code: {employee_code}")
+        return
+
+    row = match_rows.iloc[0]
+
+    # Render a single PDF
+    print(f"Generating payslip PDF for Employee Code {employee_code} ...")
+    try:
+        render_payslip(
+            row=row,
+            output_path=output_dir,
+            logo_path=(logo_path or None),
+            regular_font_path=font_regular,
+            bold_font_path=font_bold,
+            month_text=month_text,
+            image_width=width,
+            image_height=height,
+            output_format="pdf",
+            output_filename=(output_filename or None),
+        )
+        final_name = output_filename if output_filename else "auto-named file in output directory"
+        print(f"Done. Wrote PDF to {final_name}.")
+    except Exception as exc:
+        print(f"Failed to render PDF: {exc}")
 
 
 if __name__ == "__main__":
