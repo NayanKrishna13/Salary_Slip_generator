@@ -39,7 +39,7 @@ def prompt_int(prompt_text: str, default_value: int) -> int:
 
 
 def main():
-    print("Payslip PDF Generator (Interactive, by Employee Code)")
+    print("Payslip PDF Generator (Interactive, by Employee Code from 'Code' column)")
     print("Provide absolute paths. Press Enter to accept defaults shown in brackets.")
 
     excel_path = prompt_abs_path("Absolute path to Excel/CSV data file", DEFAULT_EXCEL_ABS_PATH)
@@ -52,7 +52,7 @@ def main():
 
     logo_path = prompt_abs_path("Absolute path to logo image (or leave blank)", DEFAULT_LOGO_ABS_PATH, allow_blank=True)
 
-    employee_code = input("Enter Employee Code (as in 'Employee No' column): ").strip()
+    employee_code = input("Enter Employee Code (as in 'Code' column): ").strip()
     if not employee_code:
         print("Employee Code is required.")
         return
@@ -79,29 +79,28 @@ def main():
 
     ensure_output_dir(output_dir)
 
-    # Load data
+    # Load data (header is the first non-empty row)
     try:
-        df = read_dataframe(excel_path)
+        df = read_dataframe(excel_path, use_first_row_as_header=True)
     except Exception as exc:
         print(f"Failed to read data: {exc}")
         return
 
-    # Find employee by code (string compare on 'Employee No')
-    if 'Employee No' not in df.columns:
-        print("Column 'Employee No' not found in data.")
+    # Find employee by code in 'Code'
+    if 'Code' not in df.columns:
+        print("Column 'Code' not found in data. Please ensure the first row contains headers, including 'Code'.")
         return
 
-    # Normalize to string for matching
-    df['__emp_no_str__'] = df['Employee No'].astype(str).str.strip()
-    match_rows = df[df['__emp_no_str__'] == str(employee_code).strip()]
+    df['__code_str__'] = df['Code'].astype(str).str.strip()
+    match_rows = df[df['__code_str__'] == str(employee_code).strip()]
     if match_rows.empty:
-        print(f"No record found for Employee Code: {employee_code}")
+        print(f"No record found for Code: {employee_code}")
         return
 
     row = match_rows.iloc[0]
 
     # Render a single PDF
-    print(f"Generating payslip PDF for Employee Code {employee_code} ...")
+    print(f"Generating payslip PDF for Code {employee_code} ...")
     try:
         render_payslip(
             row=row,

@@ -59,6 +59,13 @@ def safe_get(row: pd.Series, key: str, default: str = "") -> str:
     return default
 
 
+def safe_get_any(row: pd.Series, keys: List[str], default: str = "") -> str:
+    for key in keys:
+        if key in row and pd.notna(row[key]):
+            return str(row[key])
+    return default
+
+
 def safe_get_num(row: pd.Series, key: str, default: float = 0.0) -> float:
     if key in row and pd.notna(row[key]):
         try:
@@ -82,15 +89,28 @@ def draw_key_value(draw: ImageDraw.ImageDraw, x_key: int, x_val: int, y: int, ke
     return bbox[3] - bbox[1]
 
 
-def read_dataframe(input_path: str) -> pd.DataFrame:
+def read_dataframe(input_path: str, use_first_row_as_header: bool = True) -> pd.DataFrame:
     ext = os.path.splitext(input_path.lower())[1]
     if ext in [".xlsx", ".xlsm", ".xls"]:
-        return pd.read_excel(input_path)
+        df = pd.read_excel(input_path, header=None)
     elif ext in [".csv", ".tsv"]:
         sep = "," if ext == ".csv" else "\t"
-        return pd.read_csv(input_path, sep=sep)
+        df = pd.read_csv(input_path, sep=sep, header=None)
     else:
         raise ValueError(f"Unsupported input file type: {ext}")
+
+    if use_first_row_as_header:
+        # Find first non-empty row to use as header
+        non_empty = df.dropna(how="all")
+        if non_empty.empty:
+            return pd.DataFrame()
+        header_row_label = non_empty.index[0]
+        header_row_pos = df.index.get_loc(header_row_label)
+        header_series = df.loc[header_row_label].astype(str).str.strip()
+        df = df.iloc[header_row_pos + 1:].copy()
+        df.columns = header_series.values
+        df.reset_index(drop=True, inplace=True)
+    return df
 
 
 def ensure_output_dir(path: str) -> None:
@@ -177,8 +197,10 @@ def render_payslip(
         ("LOP:", safe_get(row, "LOP")),
     ]
 
+    employee_no_val = safe_get_any(row, ["Employee No", "Employee Number", "Code"]) or ""
+
     right_fields = [
-        ("Employee No:", safe_get(row, "Employee No")),
+        ("Employee No:", employee_no_val),
         ("Bank Name:", safe_get(row, "Bank Name")),
         ("Bank Account No:", safe_get(row, "Bank Account No")),
         ("PAN Number:", safe_get(row, "PAN Number")),
@@ -310,7 +332,7 @@ def render_payslip(
     draw.text((center_x - draw.textlength(footer_text, font=font_footer) // 2, image_height - 50), footer_text, font=font_footer, fill=(100, 100, 100))
 
     # Output filename
-    employee_no = safe_get(row, "Employee No", "")
+    employee_no = employee_no_val
     name = safe_get(row, "Name", "Employee")
     safe_name = "".join(c for c in f"{employee_no}_{name}" if c.isalnum() or c in ("-", "_"))
     if not safe_name:
@@ -355,7 +377,7 @@ def main():
 
     ensure_output_dir(args.output_dir)
 
-    df = read_dataframe(input_path)
+    df = read_dataframe(input_path, use_first_row_as_header=True)
 
     required_columns = [
         "Name",
@@ -365,21 +387,13 @@ def main():
         "Location",
         "Effective Work Days",
         "LOP",
-        "Employee No",
+        # Right side may supply Code instead of Employee No
+        # "Employee No",
         "Bank Name",
         "Bank Account No",
         "PAN Number",
         "PF No",
         "PF UAN",
-    ]
-    # Not strictly required, but recommended for the default layout
-    recommended_numeric = [
-        "BASIC_master", "BASIC_actual",
-        "DA_master", "DA_actual",
-        "HRA_master", "HRA_actual",
-        "TRANSPORT_ALLOWANCE_master", "TRANSPORT_ALLOWANCE_actual",
-        "DA_TPT_master", "DA_TPT_actual",
-        "PF_actual", "GLIS_actual", "REFUND_SPF_actual", "REFUND_SWF_actual",
     ]
 
     missing = [c for c in required_columns if c not in df.columns]
