@@ -15,18 +15,6 @@ DEFAULT_FONT_REGULAR = None  # e.g. "/usr/share/fonts/truetype/dejavu/DejaVuSans
 DEFAULT_FONT_BOLD = None     # e.g. "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
 
 
-def prompt_abs_path(prompt_text: str, default_value: str = "", allow_blank: bool = False) -> str:
-    while True:
-        raw = input(f"{prompt_text} [{default_value}]: ").strip()
-        value = raw or default_value
-        if value == "" and allow_blank:
-            return ""
-        if not os.path.isabs(value):
-            print("Please provide an absolute path (starting with '/').")
-            continue
-        return value
-
-
 def prompt_int(prompt_text: str, default_value: int) -> int:
     while True:
         raw = input(f"{prompt_text} [{default_value}]: ").strip()
@@ -68,39 +56,30 @@ def parse_codes(raw_codes: str) -> List[str]:
 
 def main():
     print("Payslip PDF Generator (Interactive)")
-    print("Provide absolute paths. Press Enter to accept defaults shown in brackets.")
 
     mode = prompt_mode()
 
-    excel_path = prompt_abs_path("Absolute path to Excel/CSV data file", DEFAULT_EXCEL_ABS_PATH)
-    output_dir = prompt_abs_path("Absolute path to output directory", DEFAULT_OUTPUT_DIR_ABS_PATH)
+    # Use constants set in code (no prompts for absolute paths)
+    excel_path = DEFAULT_EXCEL_ABS_PATH
+    output_dir = DEFAULT_OUTPUT_DIR_ABS_PATH
+    output_filename = DEFAULT_OUTPUT_FILENAME  # used only for single employee case
+    logo_path = DEFAULT_LOGO_ABS_PATH
 
-    # Optional: exact PDF filename (only when generating exactly one employee)
-    output_filename = input(f"Absolute output PDF filename (leave blank to auto-name) [{DEFAULT_OUTPUT_FILENAME or 'auto'}]: ").strip() or DEFAULT_OUTPUT_FILENAME
-    if output_filename and (not os.path.isabs(output_filename) or not output_filename.lower().endswith(".pdf")):
-        print("If provided, output filename must be an absolute path ending with .pdf. Ignoring.")
-        output_filename = ""
-
-    logo_path = prompt_abs_path("Absolute path to logo image (or leave blank)", DEFAULT_LOGO_ABS_PATH, allow_blank=True)
-
-    month_text = input(f"Month label to display (e.g. 'July 2025') [auto or data]: ").strip() or DEFAULT_MONTH_TEXT or None
-
-    width = prompt_int("Image width (px)", DEFAULT_IMAGE_WIDTH)
-    height = prompt_int("Image height (px)", DEFAULT_IMAGE_HEIGHT)
-
-    font_regular = input(f"Absolute path to regular TTF font [{DEFAULT_FONT_REGULAR or 'auto'}]: ").strip() or (DEFAULT_FONT_REGULAR or None)
-    if font_regular and not os.path.isabs(font_regular):
-        print("Ignoring regular font path since it's not absolute.")
-        font_regular = None
-
-    font_bold = input(f"Absolute path to bold TTF font [{DEFAULT_FONT_BOLD or 'auto'}]: ").strip() or (DEFAULT_FONT_BOLD or None)
-    if font_bold and not os.path.isabs(font_bold):
-        print("Ignoring bold font path since it's not absolute.")
-        font_bold = None
+    month_text = DEFAULT_MONTH_TEXT
+    width = DEFAULT_IMAGE_WIDTH
+    height = DEFAULT_IMAGE_HEIGHT
+    font_regular = DEFAULT_FONT_REGULAR
+    font_bold = DEFAULT_FONT_BOLD
 
     # Validate and prepare
-    if not os.path.exists(excel_path):
-        print(f"Data file not found: {excel_path}")
+    if not os.path.isabs(excel_path) or not os.path.exists(excel_path):
+        print(f"Data file not found or not absolute: {excel_path}")
+        return
+    if not os.path.isabs(output_dir):
+        print(f"Output directory path must be absolute: {output_dir}")
+        return
+    if logo_path and not os.path.isabs(logo_path):
+        print(f"Logo path must be absolute when provided: {logo_path}")
         return
 
     ensure_output_dir(output_dir)
@@ -132,7 +111,6 @@ def main():
             print("No Codes provided.")
             return
 
-        # If exactly one and user provided explicit filename, we will use it; otherwise auto-name
         for idx_code, code in enumerate(codes):
             matches = df[df['__code_norm__'] == code]
             if matches.empty:

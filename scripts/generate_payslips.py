@@ -331,13 +331,15 @@ def render_payslip(
     footer_text = "This is a system generated payslip and does not require a signature"
     draw.text((center_x - draw.textlength(footer_text, font=font_footer) // 2, image_height - 50), footer_text, font=font_footer, fill=(100, 100, 100))
 
-    # Output filename
-    employee_no = employee_no_val
-    name = safe_get(row, "Name", "Employee")
-    safe_name = "".join(c for c in f"{employee_no}_{name}" if c.isalnum() or c in ("-", "_"))
-    if not safe_name:
-        safe_name = "payslip"
-    auto_filename = f"{safe_name}_{month_text.replace(' ', '_')}"
+    # Output filename: Name and Code/Employee No
+    code_val = employee_no_val
+    name_val = safe_get(row, "Name", "Employee").strip()
+    base = f"{name_val}_{code_val}" if code_val else name_val
+    safe_base = "".join(c for c in base if c.isalnum() or c in ("-", "_"))
+    if not safe_base:
+        safe_base = "payslip"
+    suffix = f"_{month_text.replace(' ', '_')}" if month_text else ""
+    auto_filename = f"{safe_base}{suffix}"
 
     # Decide final path and save
     if output_filename:
