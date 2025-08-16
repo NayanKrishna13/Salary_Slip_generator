@@ -456,7 +456,7 @@ def _detect_join_key(emp_df: pd.DataFrame, sal_df: pd.DataFrame) -> str:
 
 def _normalize_join_column(df: pd.DataFrame, join_key: str, new_col: str = "__join_key__") -> pd.DataFrame:
 	df = df.copy()
-	df[new_col] = df[join_key].astype(str).str.strip()
+	df[new_col] = df[join_key].astype(str).str.strip().str.lower()
 	return df
 
 
