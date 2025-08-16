@@ -75,6 +75,44 @@ def safe_get_num(row: pd.Series, key: str, default: float = 0.0) -> float:
 	return default
 
 
+def get_num_any(row: pd.Series, keys: List[str], default: float = 0.0) -> float:
+	for key in keys:
+		if key in row and pd.notna(row[key]):
+			try:
+				return float(row[key])
+			except Exception:
+				continue
+	return default
+
+
+def get_earning_pair(row: pd.Series, base_keys: List[str]) -> Tuple[float, float]:
+	# Try explicit master/actual suffixed columns first for any base variant
+	for base in base_keys:
+		master_key = f"{base}_master"
+		actual_key = f"{base}_actual"
+		has_master = master_key in row and pd.notna(row[master_key])
+		has_actual = actual_key in row and pd.notna(row[actual_key])
+		if has_master or has_actual:
+			try:
+				master_val = float(row[master_key]) if has_master else float(row[actual_key]) if has_actual else 0.0
+			except Exception:
+				master_val = 0.0
+			try:
+				actual_val = float(row[actual_key]) if has_actual else master_val
+			except Exception:
+				actual_val = master_val
+			return master_val, actual_val
+	# Fallback: single column provided (no suffix). Use same value for both
+	for base in base_keys:
+		if base in row and pd.notna(row[base]):
+			try:
+				val = float(row[base])
+			except Exception:
+				val = 0.0
+			return val, val
+	return 0.0, 0.0
+
+
 def draw_centered_text(draw: ImageDraw.ImageDraw, text: str, center_x: int, y: int, font: ImageFont.FreeTypeFont, fill: Tuple[int, int, int] = (0, 0, 0)) -> int:
 
 	bbox = draw.textbbox((0, 0), text, font=font)
@@ -290,22 +328,18 @@ def render_payslip(
 
 	# Earnings rows
 	earnings_items = [
-		("BASIC", safe_get_num(row, "BASIC_master"), safe_get_num(row, "BASIC_actual")),
-
-		("DA", safe_get_num(row, "DA_master"), safe_get_num(row, "DA_actual")),
-		("HRA", safe_get_num(row, "HRA_master"), safe_get_num(row, "HRA_actual")),
-
-		("TRANSPORT ALLOWANCE", safe_get_num(row, "TRANSPORT_ALLOWANCE_master"), safe_get_num(row, "TRANSPORT_ALLOWANCE_actual")),
-
-		("DA TPT", safe_get_num(row, "DA_TPT_master"), safe_get_num(row, "DA_TPT_actual")),
-
+		("BASIC",) + get_earning_pair(row, ["BASIC", "BASIC "]),
+		("DA",) + get_earning_pair(row, ["DA", "DA "]),
+		("HRA",) + get_earning_pair(row, ["HRA", "HRA "]),
+		("TRANSPORT ALLOWANCE",) + get_earning_pair(row, ["TRANSPORT_ALLOWANCE", "TRANSPORT ALLOWANCE"]),
+		("DA TPT",) + get_earning_pair(row, ["DA_TPT", "DA TPT"]),
 	]
 
 	deductions_items = [
-		("PF", safe_get_num(row, "PF_actual")),
-		("GLIS", safe_get_num(row, "GLIS_actual")),
-		("REFUND SPF", safe_get_num(row, "REFUND_SPF_actual")),
-		("REFUND SWF", safe_get_num(row, "REFUND_SWF_actual")),
+		("PF", get_num_any(row, ["PF_actual", "PF"])),
+		("GLIS", get_num_any(row, ["GLIS_actual", "GLIS"])),
+		("REFUND SPF", get_num_any(row, ["REFUND_SPF_actual", "REFUND_SPF", "REFUND SPF"])),
+		("REFUND SWF", get_num_any(row, ["REFUND_SWF_actual", "REFUND_SWF", "REFUND SWF"])),
 	]
 
 	# Filter out zero rows (if entirely zero and empty)
