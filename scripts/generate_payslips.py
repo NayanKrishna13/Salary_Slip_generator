@@ -273,7 +273,7 @@ def render_payslip(
 		("Designation:", safe_get(row, "Designation")),
 		("Department:", safe_get(row, "Department")),
 		("Location:", safe_get(row, "Location")),
-		("Effective Work Days:", safe_get(row, "Effective Work Days")),
+		("Effective Work Days:", safe_get_any(row, ["Effective Work Days_sal", "Effective Work Days"])),
 		("LOP:", safe_get(row, "LOP")),
 	]
 
