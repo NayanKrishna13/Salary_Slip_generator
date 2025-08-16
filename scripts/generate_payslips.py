@@ -314,45 +314,24 @@ def render_payslip(
 	table_left = margin
 	table_right = image_width - margin
 	table_top = y
-	table_bottom = table_top + 360
 
-	draw.rectangle([table_left, table_top, table_right, table_bottom], outline=(0, 0, 0), width=2)
-
-
-	# Vertical grid: Earnings on left 60%, Deductions on right 40%
+	# Column geometry
 	earn_right = table_left + int(0.58 * (table_right - table_left))
-	draw.line([(earn_right, table_top), (earn_right, table_bottom)], fill=(0, 0, 0), width=2)
-
-
-	# Column headers
 	# Earnings sub-table columns: Title | Master | Actual
 	earn_col1 = table_left + 10
+	# Treat these as RIGHT edges for numeric alignment
 	earn_col2 = earn_right - 200
 	earn_col3 = earn_right - 60
 
 	ded_col1 = earn_right + 10
+	# Treat as RIGHT edge for numeric alignment
 	ded_col2 = table_right - 100
 
 	header_height = 34
+	line_height = 28
+	content_start_y = table_top + header_height + 8
 
-	# Earnings header row background (optional):
-	draw.text((earn_col1, table_top + 6), "Earnings", font=font_table_header, fill=(0, 0, 0))
-
-	draw.text((earn_col2 - 30, table_top + 6), "Master", font=font_table_header, fill=(0, 0, 0))
-
-	draw.text((earn_col3 - 30, table_top + 6), "Actual", font=font_table_header, fill=(0, 0, 0))
-
-
-	draw.text((ded_col1, table_top + 6), "Deductions", font=font_table_header, fill=(0, 0, 0))
-
-	draw.text((ded_col2 - 20, table_top + 6), "Actual", font=font_table_header, fill=(0, 0, 0))
-
-
-	# Horizontal divider under headers
-	draw.line([(table_left, table_top + header_height), (table_right, table_top + header_height)], fill=(0, 0, 0), width=2)
-
-
-	# Earnings rows
+	# Build rows first so we can size the box dynamically
 	earnings_items = [
 		("BASIC",) + get_earning_pair(row, ["BASIC", "BASIC "]),
 		("DA",) + get_earning_pair(row, ["DA", "DA "]),
@@ -370,50 +349,71 @@ def render_payslip(
 
 	# Filter out zero rows (if entirely zero and empty)
 	earnings_items = [item for item in earnings_items if (item[1] != 0 or item[2] != 0)]
-
 	deductions_items = [item for item in deductions_items if item[1] != 0]
 
-	row_y = table_top + header_height + 8
-	line_height = 28
+	max_rows = max(len(earnings_items), len(deductions_items), 1)
+	content_height = max_rows * line_height
+	totals_y = content_start_y + content_height + 10
+	table_bottom = totals_y + 40
 
+	# Draw outer box and divider
+	draw.rectangle([table_left, table_top, table_right, table_bottom], outline=(0, 0, 0), width=2)
+	draw.line([(earn_right, table_top), (earn_right, table_bottom)], fill=(0, 0, 0), width=2)
+
+	# Headers
+	draw.text((earn_col1, table_top + 6), "Earnings", font=font_table_header, fill=(0, 0, 0))
+	draw.text((earn_col2 - 30, table_top + 6), "Master", font=font_table_header, fill=(0, 0, 0))
+	draw.text((earn_col3 - 30, table_top + 6), "Actual", font=font_table_header, fill=(0, 0, 0))
+
+	draw.text((ded_col1, table_top + 6), "Deductions", font=font_table_header, fill=(0, 0, 0))
+	draw.text((ded_col2 - 20, table_top + 6), "Actual", font=font_table_header, fill=(0, 0, 0))
+
+	# Header divider
+	draw.line([(table_left, table_top + header_height), (table_right, table_top + header_height)], fill=(0, 0, 0), width=2)
+
+	# Rows
+	row_y = content_start_y
 	total_earn_master = 0.0
 	total_earn_actual = 0.0
 	for label, master, actual in earnings_items:
+		# Label left-aligned
 		draw.text((earn_col1, row_y), label, font=font_table_cell, fill=(0, 0, 0))
-
-		draw.text((earn_col2, row_y), format_currency(master), font=font_table_cell, fill=(0, 0, 0))
-
-		draw.text((earn_col3, row_y), format_currency(actual), font=font_table_cell, fill=(0, 0, 0))
-
+		# Right-aligned numbers
+		master_text = format_currency(master)
+		master_w = draw.textbbox((0, 0), master_text, font=font_table_cell)[2]
+		draw.text((earn_col2 - master_w, row_y), master_text, font=font_table_cell, fill=(0, 0, 0))
+		actual_text = format_currency(actual)
+		actual_w = draw.textbbox((0, 0), actual_text, font=font_table_cell)[2]
+		draw.text((earn_col3 - actual_w, row_y), actual_text, font=font_table_cell, fill=(0, 0, 0))
 		total_earn_master += master
 		total_earn_actual += actual
 		row_y += line_height
 
 	total_deduct = 0.0
-	row_y_ded = table_top + header_height + 8
+	row_y_ded = content_start_y
 	for label, actual in deductions_items:
 		draw.text((ded_col1, row_y_ded), label, font=font_table_cell, fill=(0, 0, 0))
-
-		draw.text((ded_col2, row_y_ded), format_currency(actual), font=font_table_cell, fill=(0, 0, 0))
-
+		actual_text = format_currency(actual)
+		actual_w = draw.textbbox((0, 0), actual_text, font=font_table_cell)[2]
+		draw.text((ded_col2 - actual_w, row_y_ded), actual_text, font=font_table_cell, fill=(0, 0, 0))
 		total_deduct += actual
 		row_y_ded += line_height
 
-	# Totals row lines
-	totals_y = table_bottom - 40
+	# Totals row
 	draw.line([(table_left, totals_y), (table_right, totals_y)], fill=(0, 0, 0), width=2)
-
-
+	# Totals labels and right-aligned numbers
 	draw.text((earn_col1, totals_y + 8), "Total Earnings:INR.", font=font_table_header, fill=(0, 0, 0))
-
-	draw.text((earn_col2, totals_y + 8), format_currency(total_earn_master), font=font_table_header, fill=(0, 0, 0))
-
-	draw.text((earn_col3, totals_y + 8), format_currency(total_earn_actual), font=font_table_header, fill=(0, 0, 0))
-
+	te_m_text = format_currency(total_earn_master)
+	te_m_w = draw.textbbox((0, 0), te_m_text, font=font_table_header)[2]
+	draw.text((earn_col2 - te_m_w, totals_y + 8), te_m_text, font=font_table_header, fill=(0, 0, 0))
+	te_a_text = format_currency(total_earn_actual)
+	te_a_w = draw.textbbox((0, 0), te_a_text, font=font_table_header)[2]
+	draw.text((earn_col3 - te_a_w, totals_y + 8), te_a_text, font=font_table_header, fill=(0, 0, 0))
 
 	draw.text((ded_col1, totals_y + 8), "Total Deductions:INR.", font=font_table_header, fill=(0, 0, 0))
-
-	draw.text((ded_col2, totals_y + 8), format_currency(total_deduct), font=font_table_header, fill=(0, 0, 0))
+	td_text = format_currency(total_deduct)
+	td_w = draw.textbbox((0, 0), td_text, font=font_table_header)[2]
+	draw.text((ded_col2 - td_w, totals_y + 8), td_text, font=font_table_header, fill=(0, 0, 0))
 
 
 	# Net Pay
