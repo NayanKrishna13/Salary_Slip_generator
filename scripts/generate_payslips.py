@@ -259,8 +259,8 @@ def render_payslip(
 		("Bank Name:", safe_get(row, "Bank Name")),
 		("Bank Account No:", safe_get(row, "Bank Account No")),
 		("PAN Number:", safe_get(row, "PAN Number")),
-		("PF No:", safe_get(row, "PF No")),
-		("PF UAN:", safe_get(row, "PF UAN")),
+		("PF No:", ""),
+		("PF UAN:", ""),
 	]
 
 	row_height = 28
