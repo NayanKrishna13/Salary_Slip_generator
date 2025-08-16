@@ -205,18 +205,18 @@ def render_payslip(
 	draw = ImageDraw.Draw(image)
 
 	# Fonts
-	font_title = load_font(bold_font_path, DEFAULT_FONT_BOLD_CANDIDATES, 44)
-	font_subtitle = load_font(regular_font_path, DEFAULT_FONT_REGULAR_CANDIDATES, 24)
+	font_title = load_font(bold_font_path, DEFAULT_FONT_BOLD_CANDIDATES, 56)
+	font_subtitle = load_font(regular_font_path, DEFAULT_FONT_REGULAR_CANDIDATES, 30)
 
-	font_section = load_font(bold_font_path, DEFAULT_FONT_BOLD_CANDIDATES, 26)
-	font_label = load_font(bold_font_path, DEFAULT_FONT_BOLD_CANDIDATES, 22)
-	font_value = load_font(regular_font_path, DEFAULT_FONT_REGULAR_CANDIDATES, 22)
+	font_section = load_font(bold_font_path, DEFAULT_FONT_BOLD_CANDIDATES, 32)
+	font_label = load_font(bold_font_path, DEFAULT_FONT_BOLD_CANDIDATES, 26)
+	font_value = load_font(regular_font_path, DEFAULT_FONT_REGULAR_CANDIDATES, 26)
 
-	font_table_header = load_font(bold_font_path, DEFAULT_FONT_BOLD_CANDIDATES, 22)
+	font_table_header = load_font(bold_font_path, DEFAULT_FONT_BOLD_CANDIDATES, 26)
 
-	font_table_cell = load_font(regular_font_path, DEFAULT_FONT_REGULAR_CANDIDATES, 22)
+	font_table_cell = load_font(regular_font_path, DEFAULT_FONT_REGULAR_CANDIDATES, 26)
 
-	font_footer = load_font(regular_font_path, DEFAULT_FONT_REGULAR_CANDIDATES, 18)
+	font_footer = load_font(regular_font_path, DEFAULT_FONT_REGULAR_CANDIDATES, 22)
 
 
 	margin = 40
@@ -258,7 +258,7 @@ def render_payslip(
 	box_top = y + 10
 	box_left = margin
 	box_right = image_width - margin
-	box_bottom = box_top + 210
+	box_bottom = box_top + 260
 	draw.rectangle([box_left, box_top, box_right, box_bottom], outline=(0, 0, 0), width=2)
 
 
@@ -289,7 +289,7 @@ def render_payslip(
 		("PF UAN:", ""),
 	]
 
-	row_height = 28
+	row_height = 32
 	pad_x = 14
 	key_x_left = box_left + pad_x
 	val_x_left = box_left + 220
@@ -327,8 +327,8 @@ def render_payslip(
 	# Treat as RIGHT edge for numeric alignment
 	ded_col2 = table_right - 100
 
-	header_height = 34
-	line_height = 28
+	header_height = 42
+	line_height = 34
 	content_start_y = table_top + header_height + 8
 
 	# Build rows first so we can size the box dynamically
