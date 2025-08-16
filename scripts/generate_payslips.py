@@ -127,6 +127,17 @@ def _build_normalized_column_map(df: pd.DataFrame) -> Dict[str, str]:
 	return mapping
 
 
+def get_num_by_normalized_keys(row: pd.Series, normalized_keys: List[str], default: float = 0.0) -> float:
+	for col in row.index:
+		norm = _normalize_header_name(col)
+		if norm in normalized_keys:
+			try:
+				return float(row[col])
+			except Exception:
+				continue
+	return default
+
+
 def draw_centered_text(draw: ImageDraw.ImageDraw, text: str, center_x: int, y: int, font: ImageFont.FreeTypeFont, fill: Tuple[int, int, int] = (0, 0, 0)) -> int:
 
 	bbox = draw.textbbox((0, 0), text, font=font)
@@ -403,33 +414,36 @@ def render_payslip(
 	draw.line([(table_left, totals_y), (table_right, totals_y)], fill=(0, 0, 0), width=2)
 	# Totals labels and right-aligned numbers
 	draw.text((earn_col1, totals_y + 8), "Total Earnings:INR.", font=font_table_header, fill=(0, 0, 0))
-	te_m_text = format_currency(total_earn_master)
+	gross_val = get_num_by_normalized_keys(row, ["gross", "grosstotal", "totalgross"])
+	te_m_text = format_currency(gross_val)
 	te_m_w = draw.textbbox((0, 0), te_m_text, font=font_table_header)[2]
 	draw.text((earn_col2 - te_m_w, totals_y + 8), te_m_text, font=font_table_header, fill=(0, 0, 0))
-	te_a_text = format_currency(total_earn_actual)
-	te_a_w = draw.textbbox((0, 0), te_a_text, font=font_table_header)[2]
+	# For "Actual" total, mirror GROSS as the single provided total
+	te_a_text = te_m_text
+	te_a_w = te_m_w
 	draw.text((earn_col3 - te_a_w, totals_y + 8), te_a_text, font=font_table_header, fill=(0, 0, 0))
 
 	draw.text((ded_col1, totals_y + 8), "Total Deductions:INR.", font=font_table_header, fill=(0, 0, 0))
-	td_text = format_currency(total_deduct)
+	deductions_val = get_num_by_normalized_keys(row, ["totaldeductions", "totaldeduction", "deductionstotal"])
+	td_text = format_currency(deductions_val)
 	td_w = draw.textbbox((0, 0), td_text, font=font_table_header)[2]
 	draw.text((ded_col2 - td_w, totals_y + 8), td_text, font=font_table_header, fill=(0, 0, 0))
 
 
 	# Net Pay
 	y = table_bottom + 20
-	net_pay = total_earn_actual - total_deduct
+	net_pay_val = get_num_by_normalized_keys(row, ["netpay", "netpayment", "net"])
 	label_text = "Net Pay for the month:"
 	draw.text((margin, y), label_text, font=font_label, fill=(0, 0, 0))
 	# Bold value
-	value_text = format_currency(net_pay)
+	value_text = format_currency(net_pay_val)
 	bbox_label = draw.textbbox((margin, y), label_text, font=font_label)
 	draw.text((bbox_label[2] + 20, y), value_text, font=font_section, fill=(0, 0, 0))
 
 	y += 40
 
 	# Amount in words
-	draw.text((margin, y), f"({amount_in_words(net_pay)})", font=font_value, fill=(0, 0, 0))
+	draw.text((margin, y), f"({amount_in_words(net_pay_val)})", font=font_value, fill=(0, 0, 0))
 
 
 	# Footer
