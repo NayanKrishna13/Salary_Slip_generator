@@ -129,7 +129,7 @@ def draw_key_value(draw: ImageDraw.ImageDraw, x_key: int, x_val: int, y: int, ke
 	return bbox[3] - bbox[1]
 
 
-def read_dataframe(input_path: str, use_first_row_as_header: bool = True, sheet_name: Optional[Union[str, int]] = None) -> pd.DataFrame:
+def read_dataframe(input_path: str, use_first_row_as_header: bool = True, sheet_name: Optional[Union[str, int]] = None, header_row_index: Optional[int] = None) -> pd.DataFrame:
 
 	ext = os.path.splitext(input_path.lower())[1]
 	if ext in [".xlsx", ".xlsm", ".xls"]:
@@ -144,7 +144,16 @@ def read_dataframe(input_path: str, use_first_row_as_header: bool = True, sheet_
 		raise ValueError(f"Unsupported input file type: {ext}")
 
 	if use_first_row_as_header:
-		# Find first non-empty row to use as header
+		# If explicit header row is provided, use it
+		if header_row_index is not None:
+			if header_row_index < 0 or header_row_index >= len(df):
+				return pd.DataFrame()
+			header_series = df.iloc[header_row_index].astype(str).str.strip()
+			df = df.iloc[header_row_index + 1:].copy()
+			df.columns = header_series.values
+			df.reset_index(drop=True, inplace=True)
+			return df
+		# Otherwise, find first non-empty row to use as header
 		non_empty = df.dropna(how="all")
 		if non_empty.empty:
 			return pd.DataFrame()
@@ -453,7 +462,7 @@ def _normalize_join_column(df: pd.DataFrame, join_key: str, new_col: str = "__jo
 
 def prepare_two_file_merged_dataframe(employee_excel_path: str, salary_excel_path: str, employee_sheet_name: str = "Employee Information", salary_sheet_name: str = "sheet0") -> pd.DataFrame:
 	emp_df = read_dataframe(employee_excel_path, use_first_row_as_header=True, sheet_name=employee_sheet_name)
-	sal_df = read_dataframe(salary_excel_path, use_first_row_as_header=True, sheet_name=salary_sheet_name)
+	sal_df = read_dataframe(salary_excel_path, use_first_row_as_header=True, sheet_name=salary_sheet_name, header_row_index=1)
 
 	if emp_df.empty:
 		raise ValueError("Employee Information sheet resulted in empty DataFrame")
