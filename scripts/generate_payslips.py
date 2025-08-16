@@ -112,6 +112,20 @@ def get_earning_pair(row: pd.Series, base_keys: List[str]) -> Tuple[float, float
 			return val, val
 	return 0.0, 0.0
 
+# ---- Header and join normalization helpers ----
+
+def _normalize_header_name(name: str) -> str:
+	return "".join(ch for ch in str(name).strip().lower() if ch.isalnum())
+
+
+def _build_normalized_column_map(df: pd.DataFrame) -> Dict[str, str]:
+	mapping: Dict[str, str] = {}
+	for col in df.columns:
+		norm = _normalize_header_name(col)
+		if norm and norm not in mapping:
+			mapping[norm] = col
+	return mapping
+
 
 def draw_centered_text(draw: ImageDraw.ImageDraw, text: str, center_x: int, y: int, font: ImageFont.FreeTypeFont, fill: Tuple[int, int, int] = (0, 0, 0)) -> int:
 
@@ -153,14 +167,17 @@ def read_dataframe(input_path: str, use_first_row_as_header: bool = True, sheet_
 			df.columns = header_series.values
 			df.reset_index(drop=True, inplace=True)
 			return df
-		# Otherwise, find first non-empty row to use as header
-		non_empty = df.dropna(how="all")
-		if non_empty.empty:
+		# Otherwise, pick the first row with at least 2 non-empty cells to avoid title rows
+		candidate_idx: Optional[int] = None
+		for r in range(len(df)):
+			row = df.iloc[r]
+			if row.notna().sum() >= 2:
+				candidate_idx = r
+				break
+		if candidate_idx is None:
 			return pd.DataFrame()
-		header_row_label = non_empty.index[0]
-		header_row_pos = df.index.get_loc(header_row_label)
-		header_series = df.loc[header_row_label].astype(str).str.strip()
-		df = df.iloc[header_row_pos + 1:].copy()
+		header_series = df.iloc[candidate_idx].astype(str).str.strip()
+		df = df.iloc[candidate_idx + 1:].copy()
 		df.columns = header_series.values
 		df.reset_index(drop=True, inplace=True)
 	return df
@@ -444,13 +461,21 @@ def render_payslip(
 		image.save(final_path)
 
 
-def _detect_join_key(emp_df: pd.DataFrame, sal_df: pd.DataFrame) -> str:
-	candidates = ["Code", "Employee No", "Employee Number"]
-	for key in candidates:
-		if key in emp_df.columns and key in sal_df.columns:
-			return key
-	if "Name" in emp_df.columns and "Name" in sal_df.columns:
-		return "Name"
+def _detect_join_key(emp_df: pd.DataFrame, sal_df: pd.DataFrame) -> Tuple[str, str]:
+	# Build normalized header maps
+	emp_map = _build_normalized_column_map(emp_df)
+	sal_map = _build_normalized_column_map(sal_df)
+	emp_keys = set(emp_map.keys())
+	sal_keys = set(sal_map.keys())
+	# Candidate normalized keys, in priority order (code-like first, then name)
+	candidates = [
+		"code", "employeeno", "employeenumber", "empno", "empnumber", "employeeid", "empid", "employeecode",
+		"name",
+	]
+	for cand in candidates:
+		if cand in emp_keys and cand in sal_keys:
+			return emp_map[cand], sal_map[cand]
+	# No common normalized headers found
 	raise ValueError("Could not find a common join key between employee and salary sheets. Expected one of: Code, Employee No, Employee Number, or Name")
 
 
@@ -469,10 +494,10 @@ def prepare_two_file_merged_dataframe(employee_excel_path: str, salary_excel_pat
 	if sal_df.empty:
 		raise ValueError("Salary sheet resulted in empty DataFrame")
 
-	join_key = _detect_join_key(emp_df, sal_df)
+	left_key, right_key = _detect_join_key(emp_df, sal_df)
 
-	emp_df = _normalize_join_column(emp_df, join_key)
-	sal_df = _normalize_join_column(sal_df, join_key)
+	emp_df = _normalize_join_column(emp_df, left_key)
+	sal_df = _normalize_join_column(sal_df, right_key)
 
 	# Avoid duplicate non-join columns from salary overwriting identity fields
 	merged = emp_df.merge(sal_df, on="__join_key__", how="inner", suffixes=("", "_sal"))
