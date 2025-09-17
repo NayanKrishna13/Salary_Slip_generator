@@ -2,12 +2,13 @@
 import argparse
 import math
 import os
+import csv
 from datetime import datetime
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Any, Mapping
 
-import pandas as pd
 from PIL import Image, ImageDraw, ImageFont
 from num2words import num2words
+from openpyxl import load_workbook
 
 
 DEFAULT_FONT_REGULAR_CANDIDATES = [
@@ -53,23 +54,36 @@ def amount_in_words(value: float) -> str:
         return "Rupees Zero Only"
 
 
-def safe_get(row: pd.Series, key: str, default: str = "") -> str:
-    if key in row and pd.notna(row[key]):
+def _is_missing(value: Any) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, float) and math.isnan(value):
+        return True
+    if isinstance(value, str) and value.strip() == "":
+        return True
+    return False
+
+
+def safe_get(row: Mapping[str, Any], key: str, default: str = "") -> str:
+    if key in row and not _is_missing(row[key]):
         return str(row[key])
     return default
 
 
-def safe_get_any(row: pd.Series, keys: List[str], default: str = "") -> str:
+def safe_get_any(row: Mapping[str, Any], keys: List[str], default: str = "") -> str:
     for key in keys:
-        if key in row and pd.notna(row[key]):
+        if key in row and not _is_missing(row[key]):
             return str(row[key])
     return default
 
 
-def safe_get_num(row: pd.Series, key: str, default: float = 0.0) -> float:
-    if key in row and pd.notna(row[key]):
+def safe_get_num(row: Mapping[str, Any], key: str, default: float = 0.0) -> float:
+    if key in row and not _is_missing(row[key]):
         try:
-            return float(row[key])
+            value = row[key]
+            if isinstance(value, str):
+                value = value.replace(",", "").strip()
+            return float(value)
         except Exception:
             return default
     return default
@@ -89,28 +103,60 @@ def draw_key_value(draw: ImageDraw.ImageDraw, x_key: int, x_val: int, y: int, ke
     return bbox[3] - bbox[1]
 
 
-def read_dataframe(input_path: str, use_first_row_as_header: bool = True) -> pd.DataFrame:
+def read_table(input_path: str, use_first_row_as_header: bool = True) -> Tuple[List[Dict[str, Any]], List[str]]:
     ext = os.path.splitext(input_path.lower())[1]
-    if ext in [".xlsx", ".xlsm", ".xls"]:
-        df = pd.read_excel(input_path, header=None)
+
+    rows_raw: List[List[Any]] = []
+    if ext in [".xlsx", ".xlsm"]:
+        wb = load_workbook(filename=input_path, data_only=True, read_only=True)
+        ws = wb.worksheets[0]
+        for row in ws.iter_rows(values_only=True):
+            rows_raw.append(list(row))
+    elif ext == ".xls":
+        raise ValueError(".xls format is not supported without pandas; please convert to .xlsx")
     elif ext in [".csv", ".tsv"]:
-        sep = "," if ext == ".csv" else "\t"
-        df = pd.read_csv(input_path, sep=sep, header=None)
+        delimiter = "," if ext == ".csv" else "\t"
+        with open(input_path, "r", newline="", encoding="utf-8") as f:
+            reader = csv.reader(f, delimiter=delimiter)
+            for row in reader:
+                rows_raw.append(row)
     else:
         raise ValueError(f"Unsupported input file type: {ext}")
 
+    # Find first non-empty row to use as header (if requested)
+    header_idx = 0
     if use_first_row_as_header:
-        # Find first non-empty row to use as header
-        non_empty = df.dropna(how="all")
-        if non_empty.empty:
-            return pd.DataFrame()
-        header_row_label = non_empty.index[0]
-        header_row_pos = df.index.get_loc(header_row_label)
-        header_series = df.loc[header_row_label].astype(str).str.strip()
-        df = df.iloc[header_row_pos + 1:].copy()
-        df.columns = header_series.values
-        df.reset_index(drop=True, inplace=True)
-    return df
+        found = False
+        for i, raw in enumerate(rows_raw):
+            if any(not _is_missing(cell if not isinstance(cell, str) else cell.strip()) for cell in raw):
+                header_idx = i
+                found = True
+                break
+        if not found:
+            return [], []
+    else:
+        header_idx = 0
+
+    # Build header names
+    raw_header = rows_raw[header_idx] if rows_raw else []
+    header: List[str] = []
+    for j, name in enumerate(raw_header):
+        text = str(name).strip() if not _is_missing(name) else f"Column{j+1}"
+        header.append(text)
+
+    # Build list of row dicts after header row
+    result_rows: List[Dict[str, Any]] = []
+    for raw in rows_raw[header_idx + 1:]:
+        # Skip entirely empty rows
+        if all(_is_missing(cell if not isinstance(cell, str) else cell.strip()) for cell in raw):
+            continue
+        row_dict: Dict[str, Any] = {}
+        for j, key in enumerate(header):
+            value = raw[j] if j < len(raw) else None
+            row_dict[key] = value
+        result_rows.append(row_dict)
+
+    return result_rows, header
 
 
 def ensure_output_dir(path: str) -> None:
@@ -118,7 +164,7 @@ def ensure_output_dir(path: str) -> None:
 
 
 def render_payslip(
-    row: pd.Series,
+    row: Mapping[str, Any],
     output_path: str,
     logo_path: Optional[str],
     regular_font_path: Optional[str],
@@ -379,7 +425,7 @@ def main():
 
     ensure_output_dir(args.output_dir)
 
-    df = read_dataframe(input_path, use_first_row_as_header=True)
+    rows, columns = read_table(input_path, use_first_row_as_header=True)
 
     required_columns = [
         "Name",
@@ -398,11 +444,11 @@ def main():
         "PF UAN",
     ]
 
-    missing = [c for c in required_columns if c not in df.columns]
+    missing = [c for c in required_columns if c not in columns]
     if missing:
         print("Warning: Missing expected columns:", missing)
 
-    for idx, row in df.iterrows():
+    for idx, row in enumerate(rows):
         render_payslip(
             row=row,
             output_path=args.output_dir,
